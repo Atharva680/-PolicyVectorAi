@@ -1,0 +1,115 @@
+version: '3.8'
+
+services:
+  db:
+    image: pgvector/pgvector:pg17
+    container_name: vectordb-postgres
+    platform: linux/amd64
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+      POSTGRES_DB: vectordb
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - ./database.sql:/docker-entrypoint-initdb.d/01-init.sql
+      - ./migrations:/docker-entrypoint-initdb.d/migrations
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+    networks:
+      - vectordb-network
+
+  litellm:
+    image: ghcr.io/berriai/litellm:latest
+    container_name: litellm-proxy
+    platform: linux/amd64
+    entrypoint: ["litellm"]
+    command: ["--model", "text-embedding-ada-002", "--port", "4000"]
+    environment:
+      - OPENAI_API_KEY=${EMBEDDING__API_KEY:-sk-1234}
+    ports:
+      - "4000:4000"
+    depends_on:
+      db:
+        condition: service_healthy
+    networks:
+      - vectordb-network
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:4000/health"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  api:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: vectordb-api
+    environment:
+      - DATABASE_URL=postgresql://postgres:postgres@db:5432/vectordb?schema=public
+      - SERVER_API_KEY=${OPENAI_API_KEY:-sk-local-xyz}
+      - OPENAI_API_KEY=${OPENAI_API_KEY:-sk-local-xyz}
+      - EMBEDDING__MODEL=${EMBEDDING__MODEL:-text-embedding-ada-002}
+      - EMBEDDING__BASE_URL=http://litellm:4000
+      - EMBEDDING__API_KEY=${EMBEDDING__API_KEY:-sk-1234}
+      - EMBEDDING__DIMENSIONS=${EMBEDDING__DIMENSIONS:-1536}
+      - HOST=0.0.0.0
+      - PORT=8000
+      - LOG_LEVEL=${LOG_LEVEL:-INFO}
+    ports:
+      - "8000:8000"
+    depends_on:
+      db:
+        condition: service_healthy
+      litellm:
+        condition: service_healthy
+    volumes:
+      - ./prisma:/app/prisma
+    networks:
+      - vectordb-network
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  ui:
+    build:
+      context: .
+      dockerfile: Dockerfile.ui
+    container_name: vectordb-ui
+    environment:
+      - STREAMLIT__API_BASE=http://api:8000
+      - STREAMLIT__API_KEY=${OPENAI_API_KEY:-sk-local-xyz}
+      - STREAMLIT__EMBED_BASE=http://litellm:4000
+      - STREAMLIT__EMBED_MODEL=${EMBEDDING__MODEL:-text-embedding-ada-002}
+      - STARGATE_API_KEY=${STARGATE_API_KEY:-}
+      - STARGATE_BASE_URL=${STARGATE_BASE_URL:-}
+      - STARGATE_MODEL=${STARGATE_MODEL:-gptoss-20b}
+      - MCP__BASE_URL=${MCP__BASE_URL:-http://localhost:7070}
+      - MCP__SEARCH_TOOL=${MCP__SEARCH_TOOL:-policy_search}
+      - MCP__FETCH_TOOL=${MCP__FETCH_TOOL:-policy_fetch}
+    ports:
+      - "8501:8501"
+    depends_on:
+      api:
+        condition: service_healthy
+    networks:
+      - vectordb-network
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8501/_stcore/health"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+volumes:
+  postgres_data:
+
+networks:
+  vectordb-network:
+    driver: bridge
+

@@ -1,0 +1,27 @@
+# LiteLLM Configuration
+# This file configures LiteLLM proxy to route embedding requests
+
+model_list:
+  - model_name: text-embedding-ada-002
+    litellm_params:
+      model: openai/text-embedding-ada-002
+      api_key: os.environ/OPENAI_API_KEY
+      api_base: https://api.openai.com/v1
+
+  - model_name: text-embedding-3-small
+    litellm_params:
+      model: openai/text-embedding-3-small
+      api_key: os.environ/OPENAI_API_KEY
+      api_base: https://api.openai.com/v1
+
+  - model_name: text-embedding-3-large
+    litellm_params:
+      model: openai/text-embedding-3-large
+      api_key: os.environ/OPENAI_API_KEY
+      api_base: https://api.openai.com/v1
+
+# General settings
+litellm_settings:
+  set_verbose: true
+  drop_params: true
+
