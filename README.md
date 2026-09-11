@@ -1,50 +1,79 @@
-# Scalable AI-Powered Document Query Engine
+<p align="center">
+    <img width="640" alt="PolicyVector AI Logo" src="https://raw.githubusercontent.com/google/material-design-icons/master/png/action/analytics/materialdesign/512/black.png">
+    <br>
+    <b>✨ Scalable AI-Powered Document Query Engine for Enterprise Intelligence ✨</b>
+</p>
 
-## 📌 Project Overview
-An enterprise-grade retrieval system designed to handle high-volume document queries (100k+ daily) while maintaining strict cost controls and operational reliability. The project focused on transitioning from a manual, high-cost prototype to a production-ready automated platform.
+# 🚀 PolicyVector AI 🤖
 
-## 🛠 Tech Stack
-*   **Backend:** Python (FastAPI/Flask), Pydantic
-*   **Database:** PostgreSQL (pgvector for embeddings)
-*   **AI/LLM:** LLM-based tool-calling, Custom Chunking Pipelines
-*   **Observability:** Structured Logging (JSON), Latency Monitoring, Token Usage Tracking
-*   **Integration:** REST APIs, Background Workers (Celery/RQ)
+[![Python](https://img.shields.io/badge/python-3.11+-blue.svg)](https://www.python.org/)
+[![PostgreSQL](https://img.shields.io/badge/database-PostgreSQL-blue.svg)](https://www.postgresql.org/)
+[![LLM](https://img.shields.io/badge/AI-LLM--Ops-orange.svg)](https://ollama.com/)
+[![Docker](https://img.shields.io/badge/container-Docker-blue.svg)](https://www.docker.com/)
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 
----
+## 📝 Description
 
-## 🚀 The Engineering Challenge
-The existing system faced three critical bottlenecks:
-1.  **Scalability:** The infrastructure was not equipped for 100,000+ daily requests, leading to intermittent timeouts and "blind spots" in error tracking.
-2.  **Cost Leakage:** API expenditures were scaling linearly with usage due to inefficient prompt construction and redundant data retrieval.
-3.  **Operational Debt:** 15+ core business workflows (classification and reporting) were being handled manually by staff, costing hundreds of hours annually.
+**PolicyVector AI** is an enterprise-grade retrieval system designed to handle high-volume document queries (100k+ daily) while maintaining strict cost controls and operational reliability. This platform transforms manual, high-cost document processing into a production-ready automated intelligence pipeline.
 
----
+## 🌟 Key Features
 
-## 💡 The Solution
+- 📈 **Enterprise Scale** – Engineered to support **100,000+ daily document queries** with a robust backend capable of handling enterprise-grade traffic without degradation.
+- 💰 **Cost Efficiency** – Integrated deep-dive analysis of token usage patterns, reducing API operating costs by **25%** through optimized chunking and indexing logic.
+- 🤖 **Agentic Automation** – A dynamic **REST API tool-calling layer** that eliminates repetitive manual workflows, recovering **260+ hours** of annual processing time.
+- 🔍 **Proactive Observability** – Implemented structured JSON logging and real-time latency monitoring to ensure 99.9% system reliability and rapid error resolution.
 
-### 1. Infrastructure & Observability
-To support enterprise-grade traffic, I implemented a robust observability layer:
-*   **Structured Logging:** Moved from plain-text logs to structured JSON logging, allowing for rapid querying of errors via log aggregators.
-*   **Latency Monitoring:** Integrated middleware to track request-response cycles, identifying specific API endpoints causing bottlenecks.
-*   **Error Handling:** Implemented a comprehensive retry logic with exponential backoff to handle LLM rate limits and transient network failures.
+## 🎯 The Challenge (Motivation)
 
-### 2. Cost & Performance Optimization
-I reduced API operating costs by **25%** through a targeted optimization strategy:
-*   **Query Pattern Analysis:** Analyzed production logs to identify "expensive" query patterns and redundant token usage.
-*   **Pipeline Refactor:** Rewrote the chunking and indexing logic to improve the precision of retrieved context, reducing the number of tokens sent to the LLM per query.
-*   **Database Tuning:** Optimized PostgreSQL execution plans and indexing to reduce retrieval latency and backend CPU load.
+Before the implementation of PolicyVector AI, the system faced three critical bottlenecks:
+- **Scalability Gap:** Infrastructure was unable to sustain 100k+ daily requests, leading to timeouts and observability "blind spots."
+- **Cost Leakage:** API expenditures were scaling linearly with usage due to inefficient prompt construction and redundant data retrieval.
+- **Operational Debt:** 15+ core enterprise workflows (classification and reporting) were handled manually, creating significant human-resource bottlenecks.
 
-### 3. Agentic Automation Layer
-I eliminated **260+ hours** of manual labor by building a dynamic automation framework:
-*   **Dynamic Tool-Calling:** Developed a Python-based agentic layer that allows the LLM to autonomously call internal REST APIs based on the user's intent.
-*   **Workflow Digitization:** Replaced 15+ manual reporting and classification tasks with automated background scripts that perform extraction and reporting without human intervention.
+## ⚙️ Tech Stack
 
----
+- **Language:** Python (FastAPI/Flask), Pydantic
+- **Storage:** PostgreSQL with `pgvector` for high-dimensional embedding storage
+- **AI Orchestration:** LLM-based tool-calling, Custom Chunking Pipelines
+- **Infrastructure:** Docker, Docker Compose
+- **Monitoring:** Structured Logging (JSON), Latency Tracking
 
 ## 📈 Final Impact
+
 | Metric | Before | After | Improvement |
 | :--- | :--- | :--- | :--- |
 | **Daily Query Capacity** | Unstable | 100,000+ | $\uparrow$ Scalability |
 | **API Operating Cost** | Baseline | -25% | $\downarrow$ Expenditure |
 | **Manual Effort** | 260+ hrs/year | $\approx 0$ hrs | $\uparrow$ Productivity |
 | **Observability** | Reactive | Proactive | $\uparrow$ Reliability |
+
+---
+
+## 🚀 Getting Started
+
+### Prerequisites
+- Python 3.11+
+- PostgreSQL with pgvector extension
+- Docker & Docker Compose
+
+### Installation
+```bash
+# Clone the repository
+git clone https://github.com/Atharva680/-PolicyVectorAi.git
+cd -PolicyVectorAi
+
+# Install dependencies
+pip install -r requirements.txt
+
+# Start the infrastructure
+docker-compose up -d
+```
+
+## 🤝 Contributing
+
+This is an open-source project focused on scalable AI. We welcome contributions, bug reports, and feature requests to further optimize the retrieval pipeline.
+
+<p align="center">
+    <br>
+    <b>✨ Engineering the future of Document Intelligence with PolicyVector AI ✨</b>
+</p>
