@@ -261,7 +261,7 @@ async def search_vector_store(
     api_key: str = Depends(get_api_key)
 ):
     """
-    Search a vector store for similar content using cosine similarity.
+    Search a vector store for similar content using cosine similarity and optional keyword search.
     
     Compatible with OpenAI's Vector Store API.
     """
@@ -275,79 +275,101 @@ async def search_vector_store(
         if not vector_store_result:
             raise HTTPException(status_code=404, detail="Vector store not found")
         
-        # Generate embedding for query
-        logger.debug(f"Generating embedding for search query: {request.query[:50]}...")
-        query_embedding = await embedding_service.generate_embedding(request.query)
-        query_vector_str = "[" + ",".join(map(str, query_embedding)) + "]"
-        
-        # Build the raw SQL query for vector similarity search
-        limit = min(request.limit or 20, 100)  # Cap at 100 results
-        
+        limit = min(request.limit or 20, 100)
         fields = settings.db_fields
         table_name = settings.table_names["embeddings"]
+        search_type = request.search_type or "hybrid"
         
-        # Build query with proper parameter placeholders for Prisma
+        # 1. Vector Search Path
+        query_embedding = None
+        if search_type in ["semantic", "hybrid"]:
+            logger.debug(f"Generating embedding for search query: {request.query[:50]}...")
+            query_embedding = await embedding_service.generate_embedding(request.query)
+            query_vector_str = "[" + ",".join(map(str, query_embedding)) + "]"
+
+        # 2. Build Query based on search_type
+        params = []
         param_count = 1
-        query_params = [query_vector_str, vector_store_id]
         
-        base_query = f"""
-        SELECT 
-            {fields.id_field},
-            {fields.content_field},
-            {fields.metadata_field},
-            ({fields.embedding_field} <=> ${param_count}::vector) as distance
-        FROM {table_name} 
-        WHERE {fields.vector_store_id_field} = ${param_count + 1}
-        """
-        param_count += 2
-        
-        # Add metadata filters if provided
+        if search_type == "semantic":
+            # Pure vector search
+            params = [query_vector_str, vector_store_id]
+            base_query = f\"\"\"
+            SELECT {fields.id_field}, {fields.content_field}, {fields.metadata_field},
+                   ({fields.embedding_field} <=> ${param_count}::vector) as distance
+            FROM {table_name}
+            WHERE {fields.vector_store_id_field} = ${param_count + 1}
+            \"\"\"
+            param_count += 2
+            order_by = "distance ASC"
+            
+        elif search_type == "keyword":
+            # Pure full-text search
+            params = [request.query, vector_store_id]
+            base_query = f\"\"\"
+            SELECT {fields.id_field}, {fields.content_field}, {fields.metadata_field},
+                   0.0 as distance
+            FROM {table_name}
+            WHERE {fields.vector_store_id_field} = ${param_count + 1}
+              AND to_tsvector('english', {fields.content_field}) @@ plainto_tsquery('english', ${param_count})
+            \"\"\"
+            param_count += 2
+            order_by = "ts_rank(to_tsvector('english', {fields.content_field}), plainto_tsquery('english', $1)) DESC"
+            
+        else: # hybrid
+            # Combine vector and keyword search
+            params = [query_vector_str, request.query, vector_store_id]
+            base_query = f\"\"\"
+            SELECT {fields.id_field}, {fields.content_field}, {fields.metadata_field},
+                   ({fields.embedding_field} <=> ${param_count}::vector) as distance
+            FROM {table_name}
+            WHERE {fields.vector_store_id_field} = ${param_count + 2}
+              AND (
+                to_tsvector('english', {fields.content_field}) @@ plainto_tsquery('english', ${param_count + 1})
+                OR ({fields.embedding_field} <=> ${param_count}::vector) < 0.5
+              )
+            \"\"\"
+            param_count += 3
+            order_by = "distance ASC"
+
+        # Add metadata filters
         filter_conditions = []
-        
         if request.filters:
             for key, value in request.filters.items():
                 filter_conditions.append(f"{fields.metadata_field}->>${param_count} = ${param_count + 1}")
-                query_params.extend([key, str(value)])
+                params.extend([key, str(value)])
                 param_count += 2
         
         if filter_conditions:
             base_query += " AND " + " AND ".join(filter_conditions)
+            
+        final_query = base_query + f" ORDER BY {order_by} LIMIT {limit}"
         
-        # Add ordering and limit
-        final_query = base_query + f" ORDER BY distance ASC LIMIT {limit}"
+        # Execute
+        results = await db.query_raw(final_query, *params)
         
-        # Execute the query
-        results = await db.query_raw(final_query, *query_params)
-        
-        # Convert results to SearchResult objects
+        # Convert results
         search_results = []
         for row in results:
-            # Convert distance to similarity score (1 - normalized_distance)
-            # Cosine distance ranges from 0 (identical) to 2 (opposite)
-            distance = float(row['distance'])
-            similarity_score = max(0.0, min(1.0, 1 - (distance / 2)))
+            distance = float(row.get('distance', 0))
+            similarity_score = max(0.0, min(1.0, 1 - (distance / 2))) if search_type != "keyword" else 1.0
             
-            # Extract filename from metadata or use a default
             metadata = row[fields.metadata_field] or {}
             filename = metadata.get('filename', f"embedding_{row[fields.id_field][:8]}")
-            
             content_chunks = [ContentChunk(type="text", text=row[fields.content_field])]
             
-            result = SearchResult(
+            search_results.append(SearchResult(
                 file_id=row[fields.id_field],
                 filename=filename,
                 score=similarity_score,
                 attributes=metadata if request.return_metadata else None,
                 content=content_chunks
-            )
-            search_results.append(result)
-        
-        logger.info(f"Search returned {len(search_results)} results for vector store {vector_store_id}")
+            ))
         
         return VectorStoreSearchResponse(
             search_query=request.query,
             data=search_results,
-            has_more=False,  # TODO: Implement pagination
+            has_more=False,
             next_page=None
         )
         
@@ -398,13 +420,13 @@ async def create_embedding(
         table_name = settings.table_names["embeddings"]
         
         result = await db.query_raw(
-            f"""
+            f\"\"\"
             INSERT INTO {table_name} ({fields.id_field}, {fields.vector_store_id_field}, {fields.content_field}, 
                                      {fields.embedding_field}, {fields.metadata_field}, {fields.created_at_field})
             VALUES (gen_random_uuid(), $1, $2, $3::vector, $4, NOW())
             RETURNING {fields.id_field}, {fields.vector_store_id_field}, {fields.content_field}, 
                      {fields.metadata_field}, EXTRACT(EPOCH FROM {fields.created_at_field})::bigint as created_at_timestamp
-            """,
+            \"\"\",
             vector_store_id,
             request.content,
             embedding_vector_str,
@@ -418,10 +440,10 @@ async def create_embedding(
         
         # Update vector store statistics
         await db.query_raw(
-            f"""
+            f\"\"\"
             UPDATE {vector_store_table} 
             SET file_counts = jsonb_set(
-                    COALESCE(file_counts, '{{"in_progress": 0, "completed": 0, "failed": 0, "cancelled": 0, "total": 0}}'::jsonb),
+                    COALESCE(file_counts, '{{\\\"in_progress\\\": 0, \\\"completed\\\": 0, \\\"failed\\\": 0, \\\"cancelled\\\": 0, \\\"total\\\": 0}}'::jsonb),
                     '{{completed}}',
                     (COALESCE((file_counts->>'completed')::int, 0) + 1)::text::jsonb
                 ),
@@ -433,7 +455,7 @@ async def create_embedding(
                 usage_bytes = COALESCE(usage_bytes, 0) + LENGTH($2),
                 last_active_at = NOW()
             WHERE id = $1
-            """,
+            \"\"\",
             vector_store_id,
             request.content
         )
@@ -530,13 +552,13 @@ async def create_embeddings_batch(
         
         # Execute batch insert
         result = await db.query_raw(
-            f"""
+            f\"\"\"
             INSERT INTO {table_name} ({fields.id_field}, {fields.vector_store_id_field}, {fields.content_field}, 
                                      {fields.embedding_field}, {fields.metadata_field}, {fields.created_at_field})
             VALUES {values_clause}
             RETURNING {fields.id_field}, {fields.vector_store_id_field}, {fields.content_field}, 
                      {fields.metadata_field}, EXTRACT(EPOCH FROM {fields.created_at_field})::bigint as created_at_timestamp
-            """,
+            \"\"\",
             *params
         )
         
@@ -548,10 +570,10 @@ async def create_embeddings_batch(
         
         # Update vector store statistics
         await db.query_raw(
-            f"""
+            f\"\"\"
             UPDATE {vector_store_table} 
             SET file_counts = jsonb_set(
-                    COALESCE(file_counts, '{{"in_progress": 0, "completed": 0, "failed": 0, "cancelled": 0, "total": 0}}'::jsonb),
+                    COALESCE(file_counts, '{{\\\"in_progress\\\": 0, \\\"completed\\\": 0, \\\"failed\\\": 0, \\\"cancelled\\\": 0, \\\"total\\\": 0}}'::jsonb),
                     '{{completed}}',
                     (COALESCE((file_counts->>'completed')::int, 0) + $2)::text::jsonb
                 ),
@@ -563,7 +585,7 @@ async def create_embeddings_batch(
                 usage_bytes = COALESCE(usage_bytes, 0) + $3,
                 last_active_at = NOW()
             WHERE id = $1
-            """,
+            \"\"\",
             vector_store_id,
             len(request.embeddings),
             total_content_length
@@ -624,4 +646,3 @@ if __name__ == "__main__":
         reload=True,
         log_level=settings.log_level.lower()
     )
-

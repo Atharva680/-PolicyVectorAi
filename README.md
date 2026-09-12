@@ -21,7 +21,8 @@
 - 📈 **Enterprise Scale** – Engineered to support **100,000+ daily document queries** with a robust backend capable of handling enterprise-grade traffic without degradation.
 - 💰 **Cost Efficiency** – Integrated deep-dive analysis of token usage patterns, reducing API operating costs by **25%** through optimized chunking and indexing logic.
 - 🤖 **Agentic Automation** – A dynamic **REST API tool-calling layer** that eliminates repetitive manual workflows, recovering **260+ hours** of annual processing time.
-- 🔍 **Proactive Observability** – Implemented structured JSON logging and real-time latency monitoring to ensure 99.9% system reliability and rapid error resolution.
+- 🔍 **Hybrid Search Engine** – Combines semantic (vector) and keyword (full-text) search to ensure high precision and recall across diverse query types.
+- 📊 **Proactive Observability** – Implemented structured JSON logging and real-time latency monitoring to ensure 99.9% system reliability and rapid error resolution.
 
 ## 🎯 The Challenge (Motivation)
 

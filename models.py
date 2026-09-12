@@ -45,6 +45,7 @@ class VectorStoreSearchRequest(BaseModel):
     limit: Optional[int] = Field(default=20, ge=1, le=100, description="Maximum number of results")
     filters: Optional[Dict[str, Any]] = Field(None, description="Metadata filters for search")
     return_metadata: Optional[bool] = Field(default=True, description="Whether to return metadata in results")
+    search_type: Optional[str] = Field(default="hybrid", description="Search type: 'semantic', 'keyword', or 'hybrid'")
 
 
 class ContentChunk(BaseModel):
